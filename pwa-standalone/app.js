@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupNavigation();
     await loadAllData();
     updateStats();
+    loadEstadisticas();
 });
 
 // Navigation
@@ -32,6 +33,11 @@ function switchTab(tab) {
     });
     
     currentTab = tab;
+    
+    // Load estadisticas when switching to that tab
+    if (tab === 'estadisticas') {
+        loadEstadisticas();
+    }
 }
 
 // Load All Data
@@ -215,6 +221,7 @@ async function saveRepostaje(event) {
     closeModal();
     await loadRepostajes();
     updateStats();
+    loadEstadisticas();
 }
 
 async function editRepostaje(id) {
@@ -226,6 +233,7 @@ async function deleteRepostaje(id) {
         await deleteRecord('repostajes', id);
         await loadRepostajes();
         updateStats();
+        loadEstadisticas();
     }
 }
 
@@ -256,7 +264,7 @@ async function loadAlmacen() {
                 </div>
                 <div class="record-actions">
                     <span class="status-badge">
-                        <span class="status-dot ${r.estado.toLowerCase()}"></span>
+                        <span class="status-dot ${r.estado.toLowerCase().replace(' ', '-').replace('/', '-')}"></span>
                         ${r.estado}
                     </span>
                     <button class="btn-edit" onclick="editAlmacen(${r.id})">✏️</button>
@@ -267,6 +275,10 @@ async function loadAlmacen() {
                 <div class="record-row">
                     <span class="record-label">Fecha de Compra:</span>
                     <span class="record-value">${r.fecha_compra}</span>
+                </div>
+                <div class="record-row">
+                    <span class="record-label">Cantidad:</span>
+                    <span class="record-value">${r.cantidad_comprada || 0} unidades</span>
                 </div>
                 <div class="record-row">
                     <span class="record-label">Coste:</span>
@@ -310,14 +322,19 @@ function openAlmacenModal(title, data = {}) {
                 <input type="text" class="form-input" name="marca" value="${data.marca || ''}" placeholder="Bosch, Mann, etc." required>
             </div>
             <div class="form-group">
+                <label class="form-label">Cantidad Comprada</label>
+                <input type="number" min="0" step="1" class="form-input" name="cantidad_comprada" value="${data.cantidad_comprada || 1}" required>
+            </div>
+            <div class="form-group">
                 <label class="form-label">Coste (€)</label>
                 <input type="number" step="0.01" class="form-input" name="coste_euros" value="${data.coste_euros || ''}" required>
             </div>
             <div class="form-group">
                 <label class="form-label">Estado</label>
                 <select class="form-select" name="estado" required>
-                    <option value="Pendiente" ${data.estado === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
-                    <option value="Instalado" ${data.estado === 'Instalado' ? 'selected' : ''}>Instalado</option>
+                    <option value="En Stock" ${!data.estado || data.estado === 'En Stock' ? 'selected' : ''}>En Stock</option>
+                    <option value="Agotado/Instalado" ${data.estado === 'Agotado/Instalado' ? 'selected' : ''}>Agotado/Instalado</option>
+                    <option value="Servicio" ${data.estado === 'Servicio' ? 'selected' : ''}>Servicio</option>
                 </select>
             </div>
             <div class="form-actions">
@@ -339,6 +356,7 @@ async function saveAlmacen(event) {
         fecha_compra: formData.get('fecha_compra'),
         recambio: formData.get('recambio'),
         marca: formData.get('marca'),
+        cantidad_comprada: parseFloat(formData.get('cantidad_comprada')),
         coste_euros: parseFloat(formData.get('coste_euros')),
         estado: formData.get('estado')
     };
@@ -353,6 +371,7 @@ async function saveAlmacen(event) {
     closeModal();
     await loadAlmacen();
     updateStats();
+    loadEstadisticas();
 }
 
 async function editAlmacen(id) {
@@ -364,6 +383,7 @@ async function deleteAlmacen(id) {
         await deleteRecord('almacen', id);
         await loadAlmacen();
         updateStats();
+        loadEstadisticas();
     }
 }
 
@@ -402,6 +422,12 @@ async function loadTaller() {
                     <span class="record-label">KM de Montaje:</span>
                     <span class="record-value">${r.km_montaje.toLocaleString()} km</span>
                 </div>
+                ${r.cantidad_usada ? `
+                <div class="record-row">
+                    <span class="record-label">Cantidad Usada:</span>
+                    <span class="record-value">${r.cantidad_usada} unidades</span>
+                </div>
+                ` : ''}
                 ${r.notas ? `
                 <div style="margin-top: 12px; padding: 12px; background: #0A0A0A; border-radius: 8px;">
                     <div class="record-label" style="margin-bottom: 4px;">Notas:</div>
@@ -413,22 +439,32 @@ async function loadTaller() {
     `).join('');
 }
 
-function showTallerForm(id = null) {
+async function showTallerForm(id = null) {
     editingId = id;
     const title = id ? 'Editar Trabajo' : 'Nuevo Trabajo';
     
+    // Get available parts from Almacén with stock > 0
+    const almacenItems = await getAllRecords('almacen');
+    const availableParts = almacenItems.filter(item => 
+        item.cantidad_comprada > 0 && item.estado === 'En Stock'
+    );
+    
     if (id) {
         getRecord('taller', id).then(record => {
-            openTallerModal(title, record);
+            openTallerModal(title, record, availableParts);
         });
     } else {
-        openTallerModal(title);
+        openTallerModal(title, {}, availableParts);
     }
 }
 
-function openTallerModal(title, data = {}) {
+function openTallerModal(title, data = {}, availableParts = []) {
     const modal = document.getElementById('modal');
     const modalBody = document.getElementById('modal-body');
+    
+    const partsOptions = availableParts.map(part => 
+        `<option value="${part.id}" data-max="${part.cantidad_comprada}">${part.recambio} (${part.marca}) - Stock: ${part.cantidad_comprada}</option>`
+    ).join('');
     
     modalBody.innerHTML = `
         <h2 class="form-title">${title}</h2>
@@ -443,7 +479,15 @@ function openTallerModal(title, data = {}) {
             </div>
             <div class="form-group">
                 <label class="form-label">Recambio Instalado</label>
-                <input type="text" class="form-input" name="recambio_instalado" value="${data.recambio_instalado || ''}" placeholder="Filtro de aceite Bosch..." required>
+                <select class="form-select" name="almacen_id" id="almacen_select" onchange="updateQuantityMax()" ${availableParts.length === 0 ? 'disabled' : ''}>
+                    <option value="">-- Selecciona del almacén --</option>
+                    ${partsOptions}
+                </select>
+                ${availableParts.length === 0 ? '<p style="color: #F59E0B; font-size: 14px; margin-top: 8px;">No hay piezas disponibles en stock</p>' : ''}
+            </div>
+            <div class="form-group">
+                <label class="form-label">Cantidad Usada</label>
+                <input type="number" min="1" step="1" class="form-input" name="cantidad_usada" id="cantidad_usada" value="${data.cantidad_usada || 1}" required>
             </div>
             <div class="form-group">
                 <label class="form-label">Notas Técnicas (Opcional)</label>
@@ -459,15 +503,65 @@ function openTallerModal(title, data = {}) {
     modal.classList.add('show');
 }
 
+function updateQuantityMax() {
+    const select = document.getElementById('almacen_select');
+    const quantityInput = document.getElementById('cantidad_usada');
+    
+    if (select.value) {
+        const selectedOption = select.options[select.selectedIndex];
+        const maxQuantity = selectedOption.getAttribute('data-max');
+        quantityInput.max = maxQuantity;
+    } else {
+        quantityInput.removeAttribute('max');
+    }
+}
+
 async function saveTaller(event) {
     event.preventDefault();
     const form = event.target;
     const formData = new FormData(form);
     
+    const almacenId = formData.get('almacen_id');
+    const cantidadUsada = parseFloat(formData.get('cantidad_usada'));
+    
+    let recambioNombre = '';
+    
+    if (almacenId) {
+        const almacenItem = await getRecord('almacen', parseInt(almacenId));
+        
+        if (!almacenItem) {
+            alert('Error: No se encontró el recambio seleccionado');
+            return;
+        }
+        
+        if (almacenItem.cantidad_comprada < cantidadUsada) {
+            alert(`Error: No hay suficiente stock. Disponible: ${almacenItem.cantidad_comprada}, Solicitado: ${cantidadUsada}`);
+            return;
+        }
+        
+        recambioNombre = `${almacenItem.recambio} (${almacenItem.marca})`;
+        
+        // Subtract quantity from almacén
+        almacenItem.cantidad_comprada -= cantidadUsada;
+        
+        // Update status if quantity reaches zero
+        if (almacenItem.cantidad_comprada <= 0) {
+            almacenItem.cantidad_comprada = 0;
+            almacenItem.estado = 'Agotado/Instalado';
+        }
+        
+        await updateRecord('almacen', almacenItem);
+    } else {
+        alert('Debes seleccionar un recambio del almacén');
+        return;
+    }
+    
     const data = {
         fecha_montaje: formData.get('fecha_montaje'),
         km_montaje: parseFloat(formData.get('km_montaje')),
-        recambio_instalado: formData.get('recambio_instalado'),
+        recambio_instalado: recambioNombre,
+        almacen_id: almacenId ? parseInt(almacenId) : null,
+        cantidad_usada: cantidadUsada,
         notas: formData.get('notas') || ''
     };
     
@@ -480,11 +574,13 @@ async function saveTaller(event) {
     
     closeModal();
     await loadTaller();
+    await loadAlmacen(); // Reload almacén to show updated quantities
     updateStats();
+    loadEstadisticas();
 }
 
 async function editTaller(id) {
-    showTallerForm(id);
+    await showTallerForm(id);
 }
 
 async function deleteTaller(id) {
@@ -492,7 +588,136 @@ async function deleteTaller(id) {
         await deleteRecord('taller', id);
         await loadTaller();
         updateStats();
+        loadEstadisticas();
     }
+}
+
+// ===== ESTADÍSTICAS =====
+async function loadEstadisticas() {
+    const repostajes = await getAllRecords('repostajes');
+    const almacen = await getAllRecords('almacen');
+    
+    const container = document.getElementById('estadisticas-content');
+    
+    // Fuel Statistics by Year/Month
+    const fuelStats = {};
+    repostajes.forEach(r => {
+        const date = new Date(r.fecha);
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1;
+        const key = `${year}-${month.toString().padStart(2, '0')}`;
+        
+        if (!fuelStats[key]) {
+            fuelStats[key] = {
+                year,
+                month,
+                litros: 0,
+                coste: 0,
+                count: 0
+            };
+        }
+        
+        fuelStats[key].litros += r.litros;
+        fuelStats[key].coste += r.total_euros;
+        fuelStats[key].count += 1;
+    });
+    
+    const fuelStatsArray = Object.values(fuelStats).sort((a, b) => {
+        if (a.year !== b.year) return b.year - a.year;
+        return b.month - a.month;
+    });
+    
+    const fuelTableRows = fuelStatsArray.map(stat => `
+        <tr>
+            <td>${stat.year}</td>
+            <td>${getMonthName(stat.month)}</td>
+            <td class="highlight-value">${stat.litros.toFixed(2)} L</td>
+            <td class="highlight-value">${stat.coste.toFixed(2)} €</td>
+            <td>${(stat.coste / stat.litros).toFixed(3)} €/L</td>
+        </tr>
+    `).join('');
+    
+    // Annual Spending from Almacén
+    const almacenStats = {};
+    almacen.forEach(a => {
+        const year = new Date(a.fecha_compra).getFullYear();
+        
+        if (!almacenStats[year]) {
+            almacenStats[year] = {
+                total: 0,
+                partes: 0,
+                servicios: 0
+            };
+        }
+        
+        almacenStats[year].total += a.coste_euros;
+        
+        if (a.estado === 'Servicio') {
+            almacenStats[year].servicios += a.coste_euros;
+        } else {
+            almacenStats[year].partes += a.coste_euros;
+        }
+    });
+    
+    const almacenStatsArray = Object.entries(almacenStats)
+        .sort((a, b) => b[0] - a[0])
+        .map(([year, data]) => ({ year: parseInt(year), ...data }));
+    
+    const almacenTableRows = almacenStatsArray.map(stat => `
+        <tr>
+            <td>${stat.year}</td>
+            <td class="highlight-value">${stat.partes.toFixed(2)} €</td>
+            <td class="highlight-value">${stat.servicios.toFixed(2)} €</td>
+            <td class="highlight-value">${stat.total.toFixed(2)} €</td>
+        </tr>
+    `).join('');
+    
+    container.innerHTML = `
+        <div class="stats-section">
+            <h2>📊 Resumen de Combustible</h2>
+            ${fuelStatsArray.length > 0 ? `
+                <table class="stats-table">
+                    <thead>
+                        <tr>
+                            <th>Año</th>
+                            <th>Mes</th>
+                            <th>Total Litros</th>
+                            <th>Coste Total</th>
+                            <th>Precio Medio/L</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${fuelTableRows}
+                    </tbody>
+                </table>
+            ` : '<p style="color: #9CA3AF;">No hay datos de combustible</p>'}
+        </div>
+        
+        <div class="stats-section">
+            <h2>💰 Gasto Anual en Almacén</h2>
+            ${almacenStatsArray.length > 0 ? `
+                <table class="stats-table">
+                    <thead>
+                        <tr>
+                            <th>Año</th>
+                            <th>Recambios</th>
+                            <th>Servicios</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${almacenTableRows}
+                    </tbody>
+                </table>
+            ` : '<p style="color: #9CA3AF;">No hay datos de almacén</p>'}
+        </div>
+    `;
+}
+
+function getMonthName(month) {
+    const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    return months[month - 1];
 }
 
 // ===== EXPORT =====
@@ -514,23 +739,23 @@ async function exportToCSV() {
     
     // Almacén
     csv += 'ALMACÉN\n';
-    csv += 'Fecha Compra,Recambio,Marca,Coste €,Estado\n';
+    csv += 'Fecha Compra,Recambio,Marca,Cantidad,Coste €,Estado\n';
     almacen.forEach(a => {
-        csv += `${a.fecha_compra},${a.recambio},${a.marca},${a.coste_euros},${a.estado}\n`;
+        csv += `${a.fecha_compra},${a.recambio},${a.marca},${a.cantidad_comprada},${a.coste_euros},${a.estado}\n`;
     });
     
     csv += '\n\n';
     
     // Taller
     csv += 'TALLER\n';
-    csv += 'Fecha Montaje,KM Montaje,Recambio Instalado,Notas\n';
+    csv += 'Fecha Montaje,KM Montaje,Recambio Instalado,Cantidad Usada,Notas\n';
     taller.forEach(t => {
         const notas = (t.notas || '').replace(/,/g, ';');
-        csv += `${t.fecha_montaje},${t.km_montaje},${t.recambio_instalado},${notas}\n`;
+        csv += `${t.fecha_montaje},${t.km_montaje},${t.recambio_instalado},${t.cantidad_usada || ''},${notas}\n`;
     });
     
     // Download
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -561,8 +786,8 @@ async function updateStats() {
                 <div class="stat-label">Trabajos</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value">${almacen.filter(a => a.estado === 'Pendiente').length}</div>
-                <div class="stat-label">Pendientes</div>
+                <div class="stat-value">${almacen.filter(a => a.estado === 'En Stock' && a.cantidad_comprada > 0).length}</div>
+                <div class="stat-label">En Stock</div>
             </div>
         </div>
     `;

@@ -27,6 +27,10 @@
             <span class="icon">🔧</span>
             <span>Taller</span>
         </button>
+        <button class="nav-btn" data-tab="estadisticas">
+            <span class="icon">📈</span>
+            <span>Stats</span>
+        </button>
         <button class="nav-btn" data-tab="export">
             <span class="icon">📊</span>
             <span>Exportar</span>
@@ -60,6 +64,14 @@
                 <button class="btn-add" onclick="showTallerForm()">+</button>
             </div>
             <div id="taller-list" class="records-list"></div>
+        </div>
+
+        <!-- Estadísticas Tab -->
+        <div class="tab-content" id="estadisticas">
+            <div class="header">
+                <h1>📈 Estadísticas</h1>
+            </div>
+            <div id="estadisticas-content" class="stats-container"></div>
         </div>
 
         <!-- Export Tab -->

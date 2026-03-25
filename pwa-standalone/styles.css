@@ -201,6 +201,18 @@ body {
     background: #10B981;
 }
 
+.status-dot.en-stock {
+    background: #10B981;
+}
+
+.status-dot.agotado-instalado {
+    background: #6B7280;
+}
+
+.status-dot.servicio {
+    background: #8B5CF6;
+}
+
 /* Modal */
 .modal {
     display: none;
@@ -395,6 +407,60 @@ body {
 .empty-state-subtext {
     font-size: 14px;
     color: #4B5563;
+}
+
+/* Statistics Tables */
+.stats-container {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.stats-section {
+    background: #1A1A1A;
+    border: 1px solid #2A2A2A;
+    border-radius: 16px;
+    padding: 20px;
+}
+
+.stats-section h2 {
+    font-size: 20px;
+    margin-bottom: 16px;
+    color: #FFFFFF;
+}
+
+.stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+}
+
+.stats-table th,
+.stats-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #2A2A2A;
+}
+
+.stats-table th {
+    font-weight: 600;
+    color: #9CA3AF;
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.stats-table td {
+    color: #FFFFFF;
+    font-size: 14px;
+}
+
+.stats-table tr:last-child td {
+    border-bottom: none;
+}
+
+.stats-table .highlight-value {
+    color: #4285F4;
+    font-weight: 600;
 }
 
 @media (min-width: 768px) {
